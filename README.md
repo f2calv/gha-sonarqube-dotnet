@@ -22,7 +22,7 @@ steps:
 ## Inputs
 
 | Input | Type | Required | Default | Description |
-|-------|------|----------|---------|-------------|
+| ----- | ---- | -------- | ------- | ----------- |
 | `github-token` | string | ✅ | | GitHub token for PR information, i.e. `${{ secrets.GITHUB_TOKEN }}` |
 | `sonar-token` | string | ✅ | | SonarQube/SonarCloud authentication token, i.e. `${{ secrets.SONAR_TOKEN }}` |
 | `sonar-host-url` | string | | `https://sonarcloud.io` | SonarQube server URL |
