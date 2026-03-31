@@ -3,60 +3,69 @@ author: SonarSource SA / Alex Vincent
 description: Performs code-quality/code-smells analysis.
 
 inputs:
-  GITHUB_TOKEN:
-    description: i.e. secrets.GITHUB_TOKEN
+  github-token:
+    description: GitHub token for PR information
     required: true
-  SONAR_TOKEN:
-    description: i.e. secrets.SONAR_TOKEN
+  sonar-token:
+    description: SonarQube/SonarCloud authentication token
     required: true
-  SONAR_HOST_URL:
+  sonar-host-url:
+    description: SonarQube server URL
     required: false
     default: https://sonarcloud.io
-  BuildConfiguration:
-    description: i.e. Debug or Release
+  build-configuration:
+    description: .NET build configuration (Debug or Release)
     default: Release
     required: false
 
 runs:
   using: composite
   steps:
-    # Steps below from https://docs.sonarsource.com/sonarqube/latest/devops-platform-integration/github-integration/adding-sonarqube-analysis-to-your-workflow/ + modifications!
-    - name: Set up JDK 17
-      uses: actions/setup-java@v1
+    # See https://docs.sonarsource.com/sonarqube/latest/devops-platform-integration/github-integration/adding-sonarqube-analysis-to-your-workflow/
+    - name: actions/setup-java
+      uses: actions/setup-java@v4
       with:
-        java-version: 1.17
-    - uses: actions/checkout@v5
-      with:
-        fetch-depth: 0 # Shallow clones should be disabled for a better relevancy of analysis
+        distribution: temurin
+        java-version: 17
+
     - name: Cache SonarQube packages
       uses: actions/cache@v4
       with:
-        path: ~\.sonar\cache
+        path: ~/.sonar/cache
         key: ${{ runner.os }}-sonar
         restore-keys: ${{ runner.os }}-sonar
+
     - name: Cache SonarQube scanner
       id: cache-sonar-scanner
       uses: actions/cache@v4
       with:
-        path: .\.sonar\scanner
+        path: .sonar/scanner
         key: ${{ runner.os }}-sonar-scanner
         restore-keys: ${{ runner.os }}-sonar-scanner
-    - name: Install SonarQube scanner
+
+    - name: dotnet tool update dotnet-sonarscanner
       if: steps.cache-sonar-scanner.outputs.cache-hit != 'true'
-      shell: powershell
+      shell: bash
       run: |
-        New-Item -Path .\.sonar\scanner -ItemType Directory
-        dotnet tool update dotnet-sonarscanner --tool-path .\.sonar\scanner
+        mkdir -p .sonar/scanner
+        dotnet tool update dotnet-sonarscanner --tool-path .sonar/scanner
+
     - name: Build and analyze
+      shell: bash
       env:
-        GITHUB_TOKEN: ${{ inputs.GITHUB_TOKEN }} # Needed to get PR information, if any
-      shell: powershell
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        SONAR_TOKEN: ${{ inputs.sonar-token }}
+        SONAR_HOST_URL: ${{ inputs.sonar-host-url }}
+        BUILD_CONFIGURATION: ${{ inputs.build-configuration }}
       run: |
-        if ("${{ inputs.SONAR_TOKEN }}" -ne "") {
-          .\.sonar\scanner\dotnet-sonarscanner begin /k:"${{ github.actor }}_${{ github.event.repository.name }}" /o:"${{ github.actor }}" /d:sonar.token="${{ inputs.SONAR_TOKEN }}" /d:sonar.host.url="${{ inputs.SONAR_HOST_URL }}"
-          dotnet build -c ${{ inputs.BuildConfiguration }}
-          .\.sonar\scanner\dotnet-sonarscanner end /d:sonar.token="${{ inputs.SONAR_TOKEN }}"
-        }
-        else {
-          Write-Host "::warning title=SONAR_TOKEN::SONAR_TOKEN is not set, skipping analysis of the build."
-        }
+        if [ -n "$SONAR_TOKEN" ]; then
+          .sonar/scanner/dotnet-sonarscanner begin \
+            /k:"${{ github.actor }}_${{ github.event.repository.name }}" \
+            /o:"${{ github.actor }}" \
+            /d:sonar.token="$SONAR_TOKEN" \
+            /d:sonar.host.url="$SONAR_HOST_URL"
+          dotnet build -c "$BUILD_CONFIGURATION"
+          .sonar/scanner/dotnet-sonarscanner end /d:sonar.token="$SONAR_TOKEN"
+        else
+          echo "::warning title=SONAR_TOKEN::sonar-token is not set, skipping analysis of the build."
+        fi
