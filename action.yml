@@ -13,6 +13,22 @@ inputs:
     description: SonarQube server URL
     required: false
     default: https://sonarcloud.io
+  sonar-project-key:
+    description: SonarQube project key
+    required: false
+    default: ''
+  sonar-organization:
+    description: SonarCloud organization
+    required: false
+    default: ''
+  solution-name:
+    description: Solution or project to build
+    required: false
+    default: ''
+  quality-gate-wait:
+    description: Wait for and enforce the Quality Gate result
+    required: false
+    default: 'false'
   build-configuration:
     description: .NET build configuration (Debug or Release)
     default: Release
@@ -56,15 +72,35 @@ runs:
         GITHUB_TOKEN: ${{ inputs.github-token }}
         SONAR_TOKEN: ${{ inputs.sonar-token }}
         SONAR_HOST_URL: ${{ inputs.sonar-host-url }}
+        SONAR_PROJECT_KEY: ${{ inputs.sonar-project-key }}
+        SONAR_ORGANIZATION: ${{ inputs.sonar-organization }}
+        QUALITY_GATE_WAIT: ${{ inputs.quality-gate-wait }}
+        SOLUTION_NAME: ${{ inputs.solution-name }}
         BUILD_CONFIGURATION: ${{ inputs.build-configuration }}
       run: |
         if [ -n "$SONAR_TOKEN" ]; then
-          .sonar/scanner/dotnet-sonarscanner begin \
-            /k:"${{ github.actor }}_${{ github.event.repository.name }}" \
-            /o:"${{ github.actor }}" \
-            /d:sonar.token="$SONAR_TOKEN" \
-            /d:sonar.host.url="$SONAR_HOST_URL"
-          dotnet build -c "$BUILD_CONFIGURATION"
+          if [ -z "$SONAR_PROJECT_KEY" ]; then
+            SONAR_PROJECT_KEY="${GITHUB_REPOSITORY_OWNER}_${GITHUB_REPOSITORY#*/}"
+          fi
+
+          scanner_args=(
+            "/k:$SONAR_PROJECT_KEY"
+            "/d:sonar.token=$SONAR_TOKEN"
+            "/d:sonar.host.url=$SONAR_HOST_URL"
+            "/d:sonar.qualitygate.wait=$QUALITY_GATE_WAIT"
+          )
+          if [ -n "$SONAR_ORGANIZATION" ]; then
+            scanner_args+=("/o:$SONAR_ORGANIZATION")
+          elif [ "$SONAR_HOST_URL" = "https://sonarcloud.io" ]; then
+            scanner_args+=("/o:$GITHUB_REPOSITORY_OWNER")
+          fi
+
+          .sonar/scanner/dotnet-sonarscanner begin "${scanner_args[@]}"
+          if [ -n "$SOLUTION_NAME" ]; then
+            dotnet build "$SOLUTION_NAME" -c "$BUILD_CONFIGURATION"
+          else
+            dotnet build -c "$BUILD_CONFIGURATION"
+          fi
           .sonar/scanner/dotnet-sonarscanner end /d:sonar.token="$SONAR_TOKEN"
         else
           echo "::warning title=SONAR_TOKEN::sonar-token is not set, skipping analysis of the build."
