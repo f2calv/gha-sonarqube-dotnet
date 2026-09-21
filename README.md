@@ -17,6 +17,8 @@ steps:
     with:
       github-token: ${{ secrets.GITHUB_TOKEN }}
       sonar-token: ${{ secrets.SONAR_TOKEN }}
+      sonar-project-key: example_project
+      solution-name: Example.Release.slnx
 ```
 
 ## Inputs
@@ -26,4 +28,8 @@ steps:
 | `github-token` | string | ✅ | | GitHub token for PR information, i.e. `${{ secrets.GITHUB_TOKEN }}` |
 | `sonar-token` | string | ✅ | | SonarQube/SonarCloud authentication token, i.e. `${{ secrets.SONAR_TOKEN }}` |
 | `sonar-host-url` | string | | `https://sonarcloud.io` | SonarQube server URL |
+| `sonar-project-key` | string | | `<owner>_<repository>` | SonarQube project key |
+| `sonar-organization` | string | | Repository owner on SonarCloud | SonarCloud organization; omit for SonarQube Server |
+| `solution-name` | string | | | Solution or project passed to `dotnet build` |
+| `quality-gate-wait` | string | | `false` | Wait for and enforce the Quality Gate result |
 | `build-configuration` | string | | `Release` | .NET build configuration e.g. `Debug` or `Release` |
