@@ -33,3 +33,5 @@ steps:
 | `solution-name` | string | | | Solution or project passed to `dotnet build` |
 | `quality-gate-wait` | string | | `false` | Wait for and enforce the Quality Gate result |
 | `build-configuration` | string | | `Release` | .NET build configuration e.g. `Debug` or `Release` |
+| `execute-tests` | string | | `false` | Run tests and import Microsoft coverage XML |
+| `dotnet-test-args` | string | | | Optional extra arguments passed to `dotnet test` |
