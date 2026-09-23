@@ -35,3 +35,4 @@ steps:
 | `build-configuration` | string | | `Release` | .NET build configuration e.g. `Debug` or `Release` |
 | `execute-tests` | string | | `false` | Run tests and import Microsoft coverage XML |
 | `dotnet-test-args` | string | | | Optional extra arguments passed to `dotnet test` |
+| `coverage-report-paths` | string | | | Microsoft coverage XML report paths |

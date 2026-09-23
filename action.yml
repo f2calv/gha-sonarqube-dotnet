@@ -41,6 +41,10 @@ inputs:
     description: Optional extra arguments passed to dotnet test
     default: ''
     required: false
+  coverage-report-paths:
+    description: Microsoft coverage XML report paths
+    default: ''
+    required: false
 
 runs:
   using: composite
@@ -87,6 +91,7 @@ runs:
         BUILD_CONFIGURATION: ${{ inputs.build-configuration }}
         EXECUTE_TESTS: ${{ inputs.execute-tests }}
         DOTNET_TEST_ARGS: ${{ inputs.dotnet-test-args }}
+        COVERAGE_REPORT_PATHS: ${{ inputs.coverage-report-paths }}
       run: |
         if [ -n "$SONAR_TOKEN" ]; then
           if [ -z "$SONAR_PROJECT_KEY" ]; then
@@ -104,7 +109,9 @@ runs:
           elif [ "$SONAR_HOST_URL" = "https://sonarcloud.io" ]; then
             scanner_args+=("/o:$GITHUB_REPOSITORY_OWNER")
           fi
-          if [ "$EXECUTE_TESTS" = "true" ]; then
+          if [ -n "$COVERAGE_REPORT_PATHS" ]; then
+            scanner_args+=("/d:sonar.cs.vscoveragexml.reportsPaths=$COVERAGE_REPORT_PATHS")
+          elif [ "$EXECUTE_TESTS" = "true" ]; then
             scanner_args+=("/d:sonar.cs.vscoveragexml.reportsPaths=**/sonar-coverage.xml")
           fi
 
