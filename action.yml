@@ -33,6 +33,14 @@ inputs:
     description: .NET build configuration (Debug or Release)
     default: Release
     required: false
+  execute-tests:
+    description: Run tests and import Microsoft coverage XML
+    default: 'false'
+    required: false
+  dotnet-test-args:
+    description: Optional extra arguments passed to dotnet test
+    default: ''
+    required: false
 
 runs:
   using: composite
@@ -77,6 +85,8 @@ runs:
         QUALITY_GATE_WAIT: ${{ inputs.quality-gate-wait }}
         SOLUTION_NAME: ${{ inputs.solution-name }}
         BUILD_CONFIGURATION: ${{ inputs.build-configuration }}
+        EXECUTE_TESTS: ${{ inputs.execute-tests }}
+        DOTNET_TEST_ARGS: ${{ inputs.dotnet-test-args }}
       run: |
         if [ -n "$SONAR_TOKEN" ]; then
           if [ -z "$SONAR_PROJECT_KEY" ]; then
@@ -94,12 +104,26 @@ runs:
           elif [ "$SONAR_HOST_URL" = "https://sonarcloud.io" ]; then
             scanner_args+=("/o:$GITHUB_REPOSITORY_OWNER")
           fi
+          if [ "$EXECUTE_TESTS" = "true" ]; then
+            scanner_args+=("/d:sonar.cs.vscoveragexml.reportsPaths=**/sonar-coverage.xml")
+          fi
 
           .sonar/scanner/dotnet-sonarscanner begin "${scanner_args[@]}"
           if [ -n "$SOLUTION_NAME" ]; then
             dotnet build "$SOLUTION_NAME" -c "$BUILD_CONFIGURATION"
           else
             dotnet build -c "$BUILD_CONFIGURATION"
+          fi
+          if [ "$EXECUTE_TESTS" = "true" ]; then
+            test_args=()
+            read -ra test_args <<< "$DOTNET_TEST_ARGS"
+            if [ -n "$SOLUTION_NAME" ]; then
+              dotnet test --solution "$SOLUTION_NAME" -c "$BUILD_CONFIGURATION" --no-restore --no-build \
+                --coverage --coverage-output-format xml --coverage-output sonar-coverage.xml "${test_args[@]}"
+            else
+              dotnet test -c "$BUILD_CONFIGURATION" --no-restore --no-build \
+                --coverage --coverage-output-format xml --coverage-output sonar-coverage.xml "${test_args[@]}"
+            fi
           fi
           .sonar/scanner/dotnet-sonarscanner end /d:sonar.token="$SONAR_TOKEN"
         else
