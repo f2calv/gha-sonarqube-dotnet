@@ -6,8 +6,6 @@ updates:
     schedule:
       interval: weekly
       time: "04:00"
-    ignore:
-      - dependency-name: actions/setup-java
 
   - package-ecosystem: pre-commit
     directory: /

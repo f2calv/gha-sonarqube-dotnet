@@ -1,138 +1,69 @@
 name: SonarQube Analysis
-author: SonarSource SA / Alex Vincent
-description: Performs code-quality/code-smells analysis.
+description: Build .NET projects and submit multi-language SonarQube analysis.
 
 inputs:
-  github-token:
-    description: GitHub token for PR information
-    required: true
   sonar-token:
-    description: SonarQube/SonarCloud authentication token
-    required: true
+    description: Authentication token e.g. secrets.SONAR_TOKEN; empty uses the SONAR_TOKEN environment variable
+    default: ''
   sonar-host-url:
-    description: SonarQube server URL
-    required: false
+    description: SonarQube server URL e.g. https://sonarcloud.io
     default: https://sonarcloud.io
   sonar-project-key:
-    description: SonarQube project key
-    required: false
-    default: ''
+    description: SonarQube project key e.g. example_project
+    required: true
   sonar-organization:
-    description: SonarCloud organization
-    required: false
+    description: SonarQube Cloud organization e.g. example; empty for SonarQube Server
     default: ''
   solution-name:
-    description: Solution or project to build
-    required: false
-    default: ''
+    description: Solution or project to build e.g. Example.slnx
+    required: true
+  additional-projects:
+    description: JSON array of additional build projects e.g. ["src/Mobile/Mobile.csproj"]
+    default: '[]'
+  project-base-directory:
+    description: Repository analysis root e.g. github.workspace
+    default: .
+  sonar-exclusions:
+    description: Comma-separated generated-file exclusions e.g. **/bin/**,**/obj/**
+    default: '**/bin/**,**/obj/**,**/node_modules/**,**/target/**,**/dist/**,.sonar/**,.sonarqube/**'
   quality-gate-wait:
     description: Wait for and enforce the Quality Gate result
-    required: false
     default: 'false'
   build-configuration:
-    description: .NET build configuration (Debug or Release)
+    description: .NET build configuration e.g. Release
     default: Release
-    required: false
   execute-tests:
-    description: Run tests and import Microsoft coverage XML
+    description: Run Microsoft.Testing.Platform tests and collect coverage
     default: 'false'
-    required: false
   dotnet-test-args:
-    description: Optional extra arguments passed to dotnet test
-    default: ''
-    required: false
+    description: JSON array of test arguments e.g. ["--minimum-expected-tests", "4"]
+    default: '[]'
   coverage-report-paths:
-    description: Microsoft coverage XML report paths
+    description: Microsoft coverage XML paths e.g. TestResults/**/*.xml
     default: ''
-    required: false
 
 runs:
   using: composite
   steps:
-    # See https://docs.sonarsource.com/sonarqube/latest/devops-platform-integration/github-integration/adding-sonarqube-analysis-to-your-workflow/
-    - name: actions/setup-java
-      uses: actions/setup-java@v4
-      with:
-        distribution: temurin
-        java-version: 17
-
-    - name: Cache SonarQube packages
-      uses: actions/cache@v6
+    - uses: actions/cache@v6
       with:
         path: ~/.sonar/cache
-        key: ${{ runner.os }}-sonar
-        restore-keys: ${{ runner.os }}-sonar
+        key: sonar-${{ runner.os }}-${{ runner.arch }}-12.1.0
 
-    - name: Cache SonarQube scanner
-      id: cache-sonar-scanner
-      uses: actions/cache@v6
-      with:
-        path: .sonar/scanner
-        key: ${{ runner.os }}-sonar-scanner
-        restore-keys: ${{ runner.os }}-sonar-scanner
-
-    - name: dotnet tool update dotnet-sonarscanner
-      if: steps.cache-sonar-scanner.outputs.cache-hit != 'true'
-      shell: bash
-      run: |
-        mkdir -p .sonar/scanner
-        dotnet tool update dotnet-sonarscanner --tool-path .sonar/scanner
-
-    - name: Build and analyze
+    - name: build and analyze
       shell: bash
       env:
-        GITHUB_TOKEN: ${{ inputs.github-token }}
-        SONAR_TOKEN: ${{ inputs.sonar-token }}
+        IN_SONAR_TOKEN: ${{ inputs.sonar-token }}
         SONAR_HOST_URL: ${{ inputs.sonar-host-url }}
         SONAR_PROJECT_KEY: ${{ inputs.sonar-project-key }}
         SONAR_ORGANIZATION: ${{ inputs.sonar-organization }}
-        QUALITY_GATE_WAIT: ${{ inputs.quality-gate-wait }}
         SOLUTION_NAME: ${{ inputs.solution-name }}
+        ADDITIONAL_PROJECTS: ${{ inputs.additional-projects }}
+        PROJECT_BASE_DIRECTORY: ${{ inputs.project-base-directory }}
+        SONAR_EXCLUSIONS: ${{ inputs.sonar-exclusions }}
+        QUALITY_GATE_WAIT: ${{ inputs.quality-gate-wait }}
         BUILD_CONFIGURATION: ${{ inputs.build-configuration }}
         EXECUTE_TESTS: ${{ inputs.execute-tests }}
         DOTNET_TEST_ARGS: ${{ inputs.dotnet-test-args }}
         COVERAGE_REPORT_PATHS: ${{ inputs.coverage-report-paths }}
-      run: |
-        if [ -n "$SONAR_TOKEN" ]; then
-          if [ -z "$SONAR_PROJECT_KEY" ]; then
-            SONAR_PROJECT_KEY="${GITHUB_REPOSITORY_OWNER}_${GITHUB_REPOSITORY#*/}"
-          fi
-
-          scanner_args=(
-            "/k:$SONAR_PROJECT_KEY"
-            "/d:sonar.token=$SONAR_TOKEN"
-            "/d:sonar.host.url=$SONAR_HOST_URL"
-            "/d:sonar.qualitygate.wait=$QUALITY_GATE_WAIT"
-          )
-          if [ -n "$SONAR_ORGANIZATION" ]; then
-            scanner_args+=("/o:$SONAR_ORGANIZATION")
-          elif [ "$SONAR_HOST_URL" = "https://sonarcloud.io" ]; then
-            scanner_args+=("/o:$GITHUB_REPOSITORY_OWNER")
-          fi
-          if [ -n "$COVERAGE_REPORT_PATHS" ]; then
-            scanner_args+=("/d:sonar.cs.vscoveragexml.reportsPaths=$COVERAGE_REPORT_PATHS")
-          elif [ "$EXECUTE_TESTS" = "true" ]; then
-            scanner_args+=("/d:sonar.cs.vscoveragexml.reportsPaths=**/sonar-coverage.xml")
-          fi
-
-          .sonar/scanner/dotnet-sonarscanner begin "${scanner_args[@]}"
-          if [ -n "$SOLUTION_NAME" ]; then
-            dotnet build "$SOLUTION_NAME" -c "$BUILD_CONFIGURATION"
-          else
-            dotnet build -c "$BUILD_CONFIGURATION"
-          fi
-          if [ "$EXECUTE_TESTS" = "true" ]; then
-            test_args=()
-            read -ra test_args <<< "$DOTNET_TEST_ARGS"
-            if [ -n "$SOLUTION_NAME" ]; then
-              dotnet test --solution "$SOLUTION_NAME" -c "$BUILD_CONFIGURATION" --no-restore --no-build \
-                --coverage --coverage-output-format xml --coverage-output sonar-coverage.xml "${test_args[@]}"
-            else
-              dotnet test -c "$BUILD_CONFIGURATION" --no-restore --no-build \
-                --coverage --coverage-output-format xml --coverage-output sonar-coverage.xml "${test_args[@]}"
-            fi
-          fi
-          .sonar/scanner/dotnet-sonarscanner end /d:sonar.token="$SONAR_TOKEN"
-        else
-          echo "::warning title=SONAR_TOKEN::sonar-token is not set, skipping analysis of the build."
-        fi
+      run: bash "$GITHUB_ACTION_PATH/.scripts/analyze.sh"
