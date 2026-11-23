@@ -100,6 +100,24 @@ setup() {
   [[ ! -e "$PROJECT_BASE_DIRECTORY/injected" ]]
 }
 
+@test "preserves project paths and test arguments with native Windows jq output" {
+  jq() {
+    if [[ "$1" == -r ]]; then
+      command jq "$@" | sed 's/$/\r/'
+    else
+      command jq "$@"
+    fi
+  }
+  export -f jq
+  export ADDITIONAL_PROJECTS='["Mobile.csproj"]' EXECUTE_TESTS=true
+  export DOTNET_TEST_ARGS='["--minimum-expected-tests","4"]'
+  run bash "$SCRIPT"
+  assert_success
+  run cat "$COMMAND_LOG"
+  assert_output --partial 'dotnet <build> <Mobile.csproj>'
+  assert_output --partial '<--minimum-expected-tests> <4>'
+}
+
 @test "accepts input credentials and forwards Cloud region and coverage settings" {
   unset SONAR_TOKEN
   export IN_SONAR_TOKEN=fixture-token SONAR_HOST_URL=https://sonarcloud.io SONAR_ORGANIZATION=example

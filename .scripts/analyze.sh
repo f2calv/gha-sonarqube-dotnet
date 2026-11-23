@@ -51,7 +51,7 @@ fi
 
 cd "$PROJECT_BASE_DIRECTORY"
 targets=("$SOLUTION_NAME")
-mapfile -t additional_targets < <(jq -r '.[]' <<< "$ADDITIONAL_PROJECTS")
+mapfile -d '' -t additional_targets < <(jq -j '.[] | ., "\u0000"' <<< "$ADDITIONAL_PROJECTS")
 targets+=("${additional_targets[@]}")
 for target in "${targets[@]}"; do
   case "$target" in
@@ -97,7 +97,7 @@ done
 if [[ "$EXECUTE_TESTS" == true ]]; then
   test_args=(--solution "$SOLUTION_NAME")
   [[ "$SOLUTION_NAME" != *.csproj ]] || test_args=(--project "$SOLUTION_NAME")
-  mapfile -t extra_args < <(jq -r '.[]' <<< "$DOTNET_TEST_ARGS")
+  mapfile -d '' -t extra_args < <(jq -j '.[] | ., "\u0000"' <<< "$DOTNET_TEST_ARGS")
   dotnet test "${test_args[@]}" -c "$BUILD_CONFIGURATION" --no-restore --no-build \
     --coverage --coverage-output-format xml "${extra_args[@]}"
 fi
