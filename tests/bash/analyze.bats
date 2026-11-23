@@ -17,6 +17,7 @@ setup() {
   echo '{"test":{"runner":"Microsoft.Testing.Platform"}}' > "$BATS_TEST_TMPDIR/work/global.json"
   unset IN_SONAR_TOKEN SONAR_ORGANIZATION SONAR_REGION ADDITIONAL_PROJECTS SONAR_EXCLUSIONS
   unset QUALITY_GATE_WAIT BUILD_CONFIGURATION EXECUTE_TESTS DOTNET_TEST_ARGS COVERAGE_REPORT_PATHS FAIL_COMMAND
+  unset RUNNER_OS EXPECT_NATIVE_SCANNER_ARGS
   export SONAR_TOKEN=fixture-token SONAR_HOST_URL=https://sonarqube.example.com SONAR_PROJECT_KEY=example_project
   export SOLUTION_NAME=Example.slnx PROJECT_BASE_DIRECTORY="$BATS_TEST_TMPDIR/work" RUNNER_TEMP="$BATS_TEST_TMPDIR/temp"
 }
@@ -129,6 +130,21 @@ setup() {
   assert_output --partial '</d:sonar.region=us>'
   assert_output --partial '</d:sonar.cs.vscoveragexml.reportsPaths=TestResults/**/*.xml>'
   refute_output --partial fixture-token
+}
+
+@test "passes unchanged scanner switches and a native analysis root on Windows" {
+  cygpath() {
+    [[ "$1" == -m && "$2" == "$PROJECT_BASE_DIRECTORY" ]] || return 1
+    printf 'D:/fixture root\n'
+  }
+  export -f cygpath
+  export RUNNER_OS=Windows EXPECT_NATIVE_SCANNER_ARGS=true
+  run bash "$SCRIPT"
+  assert_success
+  run cat "$COMMAND_LOG"
+  assert_output --partial 'scanner <begin> </k:example_project>'
+  assert_output --partial '</d:sonar.projectBaseDir=D:/fixture root>'
+  assert_line --index 3 'scanner <end>'
 }
 
 @test "requires a Cloud organization and validates boolean inputs" {

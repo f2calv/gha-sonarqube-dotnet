@@ -4,7 +4,7 @@
 # SONAR_PROJECT_KEY, SOLUTION_NAME, RUNNER_TEMP.
 # Optional: SONAR_ORGANIZATION, SONAR_REGION, ADDITIONAL_PROJECTS, PROJECT_BASE_DIRECTORY,
 # SONAR_EXCLUSIONS, QUALITY_GATE_WAIT, BUILD_CONFIGURATION, EXECUTE_TESTS,
-# DOTNET_TEST_ARGS, COVERAGE_REPORT_PATHS.
+# DOTNET_TEST_ARGS, COVERAGE_REPORT_PATHS, RUNNER_OS (Windows selects native paths).
 
 if [[ -n "${IN_SONAR_TOKEN:-}" ]]; then
   export SONAR_TOKEN="$IN_SONAR_TOKEN"
@@ -68,10 +68,15 @@ if [[ "$EXECUTE_TESTS" == true ]] && ! jq -e '.test.runner == "Microsoft.Testing
   exit 1
 fi
 
+analysis_root="$PWD"
+if [[ "${RUNNER_OS:-}" == Windows ]]; then
+  analysis_root=$(cygpath -m "$analysis_root")
+fi
+
 scanner_args=(
   "/k:$SONAR_PROJECT_KEY"
   "/d:sonar.host.url=$SONAR_HOST_URL"
-  "/d:sonar.projectBaseDir=$PWD"
+  "/d:sonar.projectBaseDir=$analysis_root"
   "/d:sonar.scanner.scanAll=true"
   "/d:sonar.dotnet.excludeTestProjects=false"
   "/d:sonar.qualitygate.wait=$QUALITY_GATE_WAIT"
@@ -90,7 +95,7 @@ trap 'rm -rf "$scanner_dir"' EXIT
 #The scanner publishes no floating major package; its JRE is provisioned automatically.
 dotnet tool install dotnet-sonarscanner --version 12.1.0 --tool-path "$scanner_dir"
 scanner="$scanner_dir/dotnet-sonarscanner"
-"$scanner" begin "${scanner_args[@]}"
+MSYS2_ARG_CONV_EXCL='*' "$scanner" begin "${scanner_args[@]}"
 for target in "${targets[@]}"; do
   dotnet build "$target" -c "$BUILD_CONFIGURATION" --no-incremental --disable-build-servers
 done
@@ -101,4 +106,4 @@ if [[ "$EXECUTE_TESTS" == true ]]; then
   dotnet test "${test_args[@]}" -c "$BUILD_CONFIGURATION" --no-restore --no-build \
     --coverage --coverage-output-format xml "${extra_args[@]}"
 fi
-"$scanner" end
+MSYS2_ARG_CONV_EXCL='*' "$scanner" end
